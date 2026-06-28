@@ -1,0 +1,19 @@
+# Helm values for actions-runner-controller
+# Install:
+#   helm repo add actions-runner-controller https://actions-runner-controller.github.io/actions-runner-controller
+#   helm install arc actions-runner-controller/actions-runner-controller \
+#     -n actions-runner-system --create-namespace -f k8s/arc-values.yaml
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: "2"
+    memory: 4Gi
+
+replicaCount: 1
+
+authSecret:
+  create: false
+  name: controller-manager-secret

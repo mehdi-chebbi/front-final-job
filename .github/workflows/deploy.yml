@@ -1,0 +1,59 @@
+name: Build & Deploy to K8s
+
+on:
+  push:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  K8S_NAMESPACE: default
+
+jobs:
+  build-and-deploy:
+    runs-on: self-hosted
+
+    steps:
+      # ── 1. Checkout ──
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── 2. Login to GitHub Container Registry ──
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 3. Build & push Docker image ──
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── 4. Deploy to K8s ──
+      - name: Deploy to Kubernetes
+        run: |
+          # Set the image tag in any K8s manifests that reference it
+          kubectl set image deployment/front-final-job \
+            front-final-job=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -n ${{ env.K8S_NAMESPACE }} \
+            --record
+
+          # Wait for rollout to complete
+          kubectl rollout status deployment/front-final-job \
+            -n ${{ env.K8S_NAMESPACE }} \
+            --timeout=300s
+
+      # ── 5. Verify ──
+      - name: Verify deployment
+        run: |
+          kubectl get pods -n ${{ env.K8S_NAMESPACE }} -l app=front-final-job
+          kubectl describe deployment front-final-job -n ${{ env.K8S_NAMESPACE }}
