@@ -1,17 +1,3 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: actions-runner-system
----
-# ── GitHub PAT (replace with your actual token) ──
-# Create this secret manually:
-#   kubectl create secret generic github-pat \
-#     -n actions-runner-system \
-#     --from-literal=github_token=YOUR_GITHUB_PAT_HERE
-#
-# The PAT needs: repo (full), read:org, read:packages, write:packages
-# Use a fine-grained token scoped to your repo with Contents: R/W, Actions: R/W, Packages: R/W
----
 apiVersion: actions.summerwind.dev/v1alpha1
 kind: RunnerDeployment
 metadata:
@@ -23,57 +9,59 @@ spec:
     spec:
       repository: mehdi-chebbi/front-final-job
 
-      # ── Ephemeral: fresh runner per job, destroyed after ──
       ephemeral: true
 
-      # ── Generous resources (you said 400GB RAM, 30 used) ──
-      resources:
-        requests:
-          cpu: "2"
-          memory: 4Gi
-        limits:
-          cpu: "4"
-          memory: 8Gi
+      labels:
+        - docker
 
-      # ── Docker-in-Docker support for building images ──
-      dockerEnabled: true
-      dockerdWithinRunnerContainer: true
+      # Runner container
+      containers:
+        - name: runner
+          image: ghcr.io/actions/actions-runner:latest
+          command: ["/home/runner/run.sh"]
+          env:
+            - name: DOCKER_HOST
+              value: tcp://localhost:2375
+          resources:
+            requests:
+              cpu: "2"
+              memory: 4Gi
+            limits:
+              cpu: "4"
+              memory: 8Gi
+          volumeMounts:
+            - name: docker-sock
+              mountPath: /var/run
 
-      # ── Use a bigger runner image with Docker pre-installed ──
-      image: summerwind/actions-runner-dind:v2.321.0
+        # DinD sidecar
+        - name: dind
+          image: docker:24-dind
+          securityContext:
+            privileged: true
+          env:
+            - name: DOCKER_TLS_CERTDIR
+              value: ""
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          volumeMounts:
+            - name: docker-sock
+              mountPath: /var/run
 
-      # ── Workspace volume for Docker builds ──
+      volumes:
+        - name: docker-sock
+          emptyDir: {}
+
       workVolumeClaimTemplate:
         storageClassName: standard
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
             storage: 20Gi
-
-      # ── Keep the runner pod around for 5 min after job for debugging ──
-      runnerPodExtraContainers:
-        - name: dind
-          image: docker:24.0.9-dind
-          securityContext:
-            privileged: true
-          env:
-            - name: DOCKER_TLS_CERTDIR
-              value: ""
-
-      env:
-        - name: RUNNER_WORKDIR
-          value: /tmp/runner/work
-        - name: DOCKER_HOST
-          value: tcp://localhost:2375
-
-      volumes:
-        - name: work
-          emptyDir: {}
-
-      volumeMounts:
-        - name: work
-          mountPath: /tmp/runner/work
-
 ---
 apiVersion: actions.summerwind.dev/v1alpha1
 kind: HorizontalRunnerAutoscaler
