@@ -59,7 +59,7 @@ metadata:
   labels:
     app: front-final-job
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: front-final-job
   ports:
