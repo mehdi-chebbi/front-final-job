@@ -8,60 +8,6 @@ spec:
   template:
     spec:
       repository: mehdi-chebbi/front-final-job
-
-      ephemeral: true
-
-      labels:
-        - docker
-
-      # Runner container
-      containers:
-        - name: runner
-          image: ghcr.io/actions/actions-runner:latest
-          command: ["/home/runner/run.sh"]
-          env:
-            - name: DOCKER_HOST
-              value: tcp://localhost:2375
-          resources:
-            requests:
-              cpu: "2"
-              memory: 4Gi
-            limits:
-              cpu: "4"
-              memory: 8Gi
-          volumeMounts:
-            - name: docker-sock
-              mountPath: /var/run
-
-        # DinD sidecar
-        - name: dind
-          image: docker:24-dind
-          securityContext:
-            privileged: true
-          env:
-            - name: DOCKER_TLS_CERTDIR
-              value: ""
-          resources:
-            requests:
-              cpu: "1"
-              memory: 2Gi
-            limits:
-              cpu: "2"
-              memory: 4Gi
-          volumeMounts:
-            - name: docker-sock
-              mountPath: /var/run
-
-      volumes:
-        - name: docker-sock
-          emptyDir: {}
-
-      workVolumeClaimTemplate:
-        storageClassName: standard
-        accessModes: ["ReadWriteOnce"]
-        resources:
-          requests:
-            storage: 20Gi
 ---
 apiVersion: actions.summerwind.dev/v1alpha1
 kind: HorizontalRunnerAutoscaler
@@ -74,5 +20,5 @@ spec:
   scaleUpTriggers:
     - amount: 1
       duration: 5m
-  minReplicas: 0
+  minReplicas: 1
   maxReplicas: 3
